@@ -1,6 +1,4 @@
 import boto3
-import sns_extended_client
-import src.sns_extended_client
 from src.sns_extended_client.session import SNSExtendedClientSession
 
 
@@ -77,12 +75,5 @@ def demo():
     topic.publish(Message='This message should be published to S3 as it exceeds the limit of the 32 bytes')
 
 
-
 if __name__ == '__main__':
     demo()
-
-# sqs_session = SQSExtendedClientSession()
-# sns_session = SNSExtendedClientSession()
-
-# sqs_extended_client = sqs_session.client('sqs')
-# sqs_extended_client.create_queue(QueueName='')

@@ -1,11 +1,12 @@
-from boto3 import resource
+from boto3 import resource 
 import botoinator
 from json import dumps as jsondumps
 from uuid import uuid4
 
 
 DEFAULT_MESSAGE_SIZE_THRESHOLD = 262144
-MESSAGE_POINTER_CLASS = 'com.amazon.sqs.javamessaging.MessageS3Pointer'
+MESSAGE_POINTER_CLASS = 'software.amazon.payloadoffloading.PayloadS3Pointer'
+LEGACY_RESERVED_ATTRIBUTE_NAME = 'SQSLargePayloadSize'
 RESERVED_ATTRIBUTE_NAME = 'ExtendedPayloadSize'
 S3_KEY_ATTRIBUTE_NAME = 'S3Key'
 MULTIPLE_PROTOCOL_MESSAGE_STRUCTURE = 'json'
@@ -52,6 +53,17 @@ def _set_always_through_s3(self, always_through_s3):
   assert not always_through_s3 or (always_through_s3 and self.large_payload_support)
   setattr(self, '__always_through_s3', always_through_s3)
 
+def _delete_use_legacy_attribute(self):
+  setattr(self, '__always_through_s3', False)
+
+def _get_use_legacy_attribute(self):
+  return getattr(self, '__use_legacy_attribute', False)
+
+
+def _set_use_legacy_attribute(self, use_legacy_attribute):
+  assert isinstance(use_legacy_attribute, bool)
+  setattr(self, '__use_legacy_attribute', use_legacy_attribute)
+
 
 def _delete_s3(self):
   if hasattr(self, '__s3'):
@@ -83,9 +95,10 @@ def _is_large_message(self, attributes, encoded_body):
   total = total + len(encoded_body)
   return self.message_size_threshold < total
 
-def _check_message_attribute_size(self, attributes):
+
+def _check_size_of_message_attribute(self, message_attributes):
   total = 0
-  for key, value in attributes.items():
+  for key, value in message_attributes.items():
     total = total + len(key.encode())
     if 'DataType' in value:
       total = total + len(value['DataType'].encode())
@@ -93,9 +106,17 @@ def _check_message_attribute_size(self, attributes):
       total = total + len(value['StringValue'].encode())
     if 'BinaryValue' in value:
       total = total + len(value['BinaryValue'])
+    
+    if total > self.message_size_threshold:
+      raise Exception('Message Attributes Size is greater than the message size threshold consider including payload in the message body')
+
+
+def _check_message_attributes(self, message_attributes):
+  num_message_attributes = len(message_attributes)
   
-  if total > self.message_size_threshold:
-    raise Exception('Message Attribute Size is greater than the message size threshold consider including payload in the message body')
+  if (num_message_attributes > MAX_ALLOWED_ATTRIBUTES):
+      error_message = "Number of message attributes [" + num_message_attributes + "] exceeds the maximum allowed for large-payload messages [" + MAX_ALLOWED_ATTRIBUTES + "]."
+      raise Exception(error_message)
 
 
 def _get_s3_key(self, message_attributes):
@@ -118,16 +139,24 @@ def _determine_payload(self, message_attributes, message_body, message_structure
     if message_structure == 'json':
       raise Exception('SNS extended client does not support sending JSON messages for large messages.')
 
-    if RESERVED_ATTRIBUTE_NAME in message_attributes:
-      raise Exception(f'Message attribute name {RESERVED_ATTRIBUTE_NAME} is reserved for use by SNS extended client.')
+    for attribute in (RESERVED_ATTRIBUTE_NAME, LEGACY_RESERVED_ATTRIBUTE_NAME):
+      if attribute in message_attributes:
+        raise Exception(f'Message attribute name {attribute} is reserved for use by SNS extended client.')
 
-    message_attributes[RESERVED_ATTRIBUTE_NAME] = {}
-    message_attributes[RESERVED_ATTRIBUTE_NAME]['DataType'] = 'Number'
-    message_attributes[RESERVED_ATTRIBUTE_NAME]['StringValue'] = str(len(encoded_body))
+    attribute_name_used = LEGACY_RESERVED_ATTRIBUTE_NAME if self.use_legacy_attribute else RESERVED_ATTRIBUTE_NAME
+    message_attributes[attribute_name_used] = {}
+    message_attributes[attribute_name_used]['DataType'] = 'Number'
+    message_attributes[attribute_name_used]['StringValue'] = str(len(encoded_body))
+
+    self._check_message_attributes(message_attributes)
+    self._check_size_of_message_attributes(message_attributes)
 
     s3_key = self._get_s3_key(message_attributes)
 
     self.s3.Object(self.large_payload_support, s3_key).put(**self._create_s3_put_object_params(encoded_body))
+
+    self._check_size_of_message_attributes(message_attributes)
+
     message_body = jsondumps([MESSAGE_POINTER_CLASS, {'s3BucketName': self.large_payload_support, 's3Key': s3_key}])
 
   return message_attributes, message_body
@@ -149,15 +178,23 @@ def _add_custom_attributes(class_attributes):
     _set_always_through_s3,
     _delete_always_through_s3
   )
+  class_attributes['use_legacy_attribute'] = property(
+    _get_use_legacy_attribute,
+    _set_use_legacy_attribute,
+    _delete_use_legacy_attribute
+  )
   class_attributes['s3'] = property(
     _get_s3,
     _set_s3,
     _delete_s3
   )
+
   class_attributes['_create_s3_put_object_params'] = _create_s3_put_object_params
   class_attributes['_is_large_message'] = _is_large_message
   class_attributes['_determine_payload'] = _determine_payload
   class_attributes['_get_s3_key'] = _get_s3_key
+  class_attributes['_check_size_of_message_attributes'] = _check_size_of_message_attribute
+  class_attributes['_check_message_attributes'] = _check_message_attributes
 
 
 def _add_client_custom_attributes(base_classes, **kwargs):

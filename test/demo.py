@@ -1,7 +1,8 @@
 import boto3
+import src.sns_extended_client
 from src.sns_extended_client import SNSExtendedClientSession
 
-sns_extended_client = SNSExtendedClientSession().client('sns', region_name='us-east-1')
+sns_extended_client = boto3.client('sns', region_name='us-east-1')
 
 sns_extended_client.large_payload_support = 'extended-client-bucket-store'
 sns_extended_client.always_through_s3 = True
@@ -31,4 +32,3 @@ topic.publish(Message='This message should is published using the topic resource
 
 topic.message_size_threshold = 32
 topic.publish(Message='This message should be published to S3 as it exceeds the limit of the 32 bytes')
-

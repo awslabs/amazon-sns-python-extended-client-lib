@@ -18,7 +18,7 @@ sns-extended-client allows for publishing large messages through SNS via S3. Thi
 
 To do this, this library automatically extends the normal boto3 SNS client and Topic resource classes upon import using the [botoinator](https://github.com/QuiNovas/botoinator) library. This allows for further extension or decoration if desired.
 
-## Additional attributes available on `boto3` SQS `client` and `Queue` objects
+## Additional attributes available on `boto3` SNS `client`, `Topic` and `PlatformEndpoint` objects.
 * large_payload_support -- the S3 bucket name that will store large messages.
 * message_size_threshold -- the threshold for storing the message in the large messages bucket. Cannot be less than `0` or greater than `262144`. Defaults to `262144`.
 * always_through_s3 -- if `True`, then all messages will be serialized to S3. Defaults to `False`
@@ -33,72 +33,72 @@ To do this, this library automatically extends the normal boto3 SNS client and T
 
 ```python
 import boto3
-import sqs_extended_client
+import sns_extended_client
 
 # Low level client
-sqs = boto3.client('sqs')
-sqs.large_payload_support = 'my-bucket-name'
+sn = boto3.client('sns')
+sns.large_payload_support = 'bucket-name'
 
 # boto resource
-resource = boto3.resource('sqs')
-queue = resource.Queue('queue-url')
+resource = boto3.resource('sns')
+topic = resource.Topic('topic-arn')
 
 # Or
-queue = resource.create_queue(QueueName='queue-name')
+topic = resource.create_queue(TopicName='topic-name')
 
-queue.large_payload_support = 'my-bucket-name'
+topic.large_payload_support = 'my-bucket-name'
 ```
 
 ### Enabling support for large payloads (>64K)
 ```python
 import boto3
-import sqs_extended_client
+import sns_extended_client
 
 # Low level client
-sqs = boto3.client('sqs')
-sqs.large_payload_support = 'my-bucket-name'
-sqs.message_size_threshold = 65536
+sns = boto3.client('sns')
+sns.large_payload_support = 'BUCKET-NAME'
+sns.message_size_threshold = 65536
 
 # boto resource
-resource = boto3.resource('sqs')
-queue = resource.Queue('queue-url')
+resource = boto3.resource('sns')
+topic = resource.Topic('topic-arn')
 
 # Or
-queue = resource.create_queue(QueueName='queue-name')
+topic = resource.create_queue('topic-name')
 
-queue.large_payload_support = 'my-bucket-name'
-queue.message_size_threshold = 65536
+topic.large_payload_support = 'bucket-name'
+topic.message_size_threshold = 65536
 ```
 ### Enabling support for large payloads for all messages
 ```python
 import boto3
-import sqs_extended_client
+import sns_extended_client
 
 # Low level client
-sqs = boto3.client('sqs')
-sqs.large_payload_support = 'my-bucket-name'
-sqs.always_through_s3 = True
+sns = boto3.client('sns')
+sns.large_payload_support = 'my-bucket-name'
+sns.always_through_s3 = True
 
 # boto resource
-resource = boto3.resource('sqs')
-queue = resource.Queue('queue-url')
+resource = boto3.resource('sns')
+topic = resource.Topic('topic-arn')
 
 # Or
-queue = resource.create_queue(QueueName='queue-name')
+topic = resource.create_queue(QueueName='topic-name')
 
-queue.large_payload_support = 'my-bucket-name'
-queue.always_through_s3 = True
+topic.large_payload_support = 'my-bucket-name'
+topic.always_through_s3 = True
 ```
 ### Setting a custom S3 resource
 ```python
 import boto3
 from botocore.config import Config
-import sqs_extended_client
+import sns_extended_client
 
 # Low level client
-sqs = boto3.client('sqs')
-sqs.large_payload_support = 'my-bucket-name'
-sqs.s3 = boto3.resource(
+sns = boto3.client('sns')
+sns.large_payload_support = 'my-bucket-name'
+sns.s3 = boto3.resource(
   's3', 
   config=Config(
     signature_version='s3v4',
@@ -109,14 +109,14 @@ sqs.s3 = boto3.resource(
 )
 
 # boto resource
-resource = boto3.resource('sqs')
-queue = resource.Queue('queue-url')
+resource = boto3.resource('sns')
+topic = resource.Topic('topic-arn')
 
 # Or
-queue = resource.create_queue(QueueName='queue-name')
+topic = resource.create_queue(QueueName='topic-name')
 
-queue.large_payload_support = 'my-bucket-name'
-queue.s3 = boto3.resource(
+topic.large_payload_support = 'my-bucket-name'
+topic.s3 = boto3.resource(
   's3', 
   config=Config(
     signature_version='s3v4',
