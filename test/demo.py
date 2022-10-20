@@ -7,18 +7,18 @@ sns_extended_client = boto3.client('sns', region_name='us-east-1')
 sns_extended_client.large_payload_support = 'extended-client-bucket-store'
 sns_extended_client.always_through_s3 = True
 
-sns_extended_client.publish(TopicArn='arn:aws:sns:us-east-1:569434664987:extended-client-topic', Message='This message should be published to S3')
+sns_extended_client.publish(TopicArn='--TOPIC ARN--', Message='This message should be published to S3')
 
 sns_extended_client.always_through_s3 = False
 
-sns_extended_client.publish(TopicArn='arn:aws:sns:us-east-1:569434664987:extended-client-topic', Message='This message should be published.')
+sns_extended_client.publish(TopicArn='--TOPIC ARN--', Message='This message should be published.')
 
 sns_extended_client.message_size_threshold = 32
-sns_extended_client.publish(TopicArn='arn:aws:sns:us-east-1:569434664987:extended-client-topic', Message='This message should be published to S3 as it exceeds the limit of the 32 bytes')
+sns_extended_client.publish(TopicArn='--TOPIC ARN--', Message='This message should be published to S3 as it exceeds the limit of the 32 bytes')
 
 sns_extended_client_resource = SNSExtendedClientSession().resource('sns', region_name='us-east-1')
 
-topic = sns_extended_client_resource.Topic('arn:aws:sns:us-east-1:569434664987:extended-client-topic')
+topic = sns_extended_client_resource.Topic('--TOPIC ARN--')
 
 
 topic.large_payload_support = 'extended-client-bucket-store'
