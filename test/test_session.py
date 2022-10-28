@@ -416,6 +416,19 @@ class TestSNSExtendedClient(unittest.TestCase):
             )
         )  # large attribute --> True
 
+    def test_publish_json_msg_structure(self):
+        """Test publish raises exception before publishing json structured message"""
+        sns_extended_client = self.sns_extended_client
+        sns_extended_client.always_through_s3 = True
+
+        self.assertRaises(SNSExtendedClientException, sns_extended_client.publish, TopicArn='',Message='{"key": "value"}', MessageStructure="json")
+
+    def test_missing_topic_arn(self):
+        """Test publish raises Exception when publishing without a topic ARN to publish"""
+        sns_extended_client = self.sns_extended_client
+
+        self.assertRaises(SNSExtendedClientException, sns_extended_client.publish, Message=SMALL_MSG_BODY, MessageAttributes=SMALL_MSG_ATTRIBUTES)
+
     def has_msg_body(self, messages, expected_msg_body, extended_payload=False):
         """Checks for target message_body in the list of messages from SQS queue"""
         for message in messages:

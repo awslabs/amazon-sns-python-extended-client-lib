@@ -151,7 +151,7 @@ def _create_s3_put_object_params(self, encoded_body: bytes):
 
 
 def _make_payload(
-    self, message_attributes: dict, message_body: str, message_structure: str
+    self, message_attributes: dict, message_body, message_structure: str
 ):
     message_attributes = loads(dumps(message_attributes))
     encoded_body = message_body.encode()
@@ -162,7 +162,7 @@ def _make_payload(
 
         if message_structure == "json":
             raise SNSExtendedClientException(
-                "SNS extended client does not support sending JSON messages for large messages."
+                "SNS extended client does not support sending JSON messages for large/payload backed messages."
             )
 
         for attribute in (RESERVED_ATTRIBUTE_NAME, LEGACY_RESERVED_ATTRIBUTE_NAME):
@@ -247,6 +247,11 @@ def _add_platform_endpoint_resource_custom_attributes(class_attributes, **kwargs
 
 def _publish_decorator(func):
     def _publish(self, **kwargs):
+        if "TopicArn" not in kwargs and "TargetArn" not in kwargs and not getattr(self, "arn", False):
+            raise SNSExtendedClientException(
+                "Missing TopicArn: TopicArn is a required argument!"
+            )
+
         kwargs["MessageAttributes"], kwargs["Message"] = self._make_payload(
             kwargs.get("MessageAttributes", {}),
             kwargs["Message"],
