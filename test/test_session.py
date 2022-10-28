@@ -12,6 +12,8 @@ from src.sns_extended_client.session import (
     LEGACY_RESERVED_ATTRIBUTE_NAME,
     MAX_ALLOWED_ATTRIBUTES,
     SNSExtendedClientSession,
+    LANGUAGE_ATTRIBUTE_NAME,
+    CLIENT_LANGUAGE,
 )
 from src.sns_extended_client.exceptions import SNSExtendedClientException
 from moto import mock_s3, mock_sns, mock_sqs
@@ -157,7 +159,7 @@ class TestSNSExtendedClient(unittest.TestCase):
 
     def test_topic_publish_calls_make_payload(self):
         """Test SNSExtendedSession Topic Resource publish API call invokes _make_payload method to change the message and message attributes"""
-        topic_resource = boto3.resource('sns').Topic(self.test_topic_arn)
+        topic_resource = boto3.resource("sns").Topic(self.test_topic_arn)
 
         modified_msg_attr = {"dummy": {"StringValue": "dummy", "DataType": "String"}}
         modified_msg = "dummy msg"
@@ -170,9 +172,7 @@ class TestSNSExtendedClient(unittest.TestCase):
         )
 
         topic_resource._make_payload = make_payload_mock
-        topic_resource.publish(
-            MessageAttributes={}, Message="test"
-        )
+        topic_resource.publish(MessageAttributes={}, Message="test")
         # verify the call to _make_payload
         make_payload_mock.assert_called_once_with({}, "test", None)
 
@@ -185,7 +185,9 @@ class TestSNSExtendedClient(unittest.TestCase):
 
     def test_platform_endpoint_publish_calls_make_payload(self):
         """Test SNSExtendedSession PlatformEndpoint resource publish API call invokes _make_payload method to change the message and message attributes"""
-        platform_endpoint_resource = boto3.resource('sns').PlatformEndpoint(self.test_topic_arn)
+        platform_endpoint_resource = boto3.resource("sns").PlatformEndpoint(
+            self.test_topic_arn
+        )
 
         modified_msg_attr = {"dummy": {"StringValue": "dummy", "DataType": "String"}}
         modified_msg = "dummy msg"
@@ -194,13 +196,12 @@ class TestSNSExtendedClient(unittest.TestCase):
         }  # to be compatible with SQS queue message format
 
         make_payload_mock = create_autospec(
-            platform_endpoint_resource._make_payload, return_value=(modified_msg_attr, modified_msg)
+            platform_endpoint_resource._make_payload,
+            return_value=(modified_msg_attr, modified_msg),
         )
 
         platform_endpoint_resource._make_payload = make_payload_mock
-        platform_endpoint_resource.publish(
-            MessageAttributes={}, Message="test"
-        )
+        platform_endpoint_resource.publish(MessageAttributes={}, Message="test")
         # verify the call to _make_payload
         make_payload_mock.assert_called_once_with({}, "test", None)
 
@@ -233,11 +234,9 @@ class TestSNSExtendedClient(unittest.TestCase):
             SMALL_MSG_ATTRIBUTES, LARGE_MSG_BODY, None
         )
 
-        expected_msg_attr = loads(dumps(SMALL_MSG_ATTRIBUTES))
-        expected_msg_attr[RESERVED_ATTRIBUTE_NAME] = {
-            "DataType": "Number",
-            "StringValue": str(len(LARGE_MSG_BODY.encode())),
-        }
+        expected_msg_attr = self.make_expected_message_attribute(
+            SMALL_MSG_ATTRIBUTES, LARGE_MSG_BODY, RESERVED_ATTRIBUTE_NAME
+        )
 
         self.assertEqual(expected_msg_attr, actual_msg_attr)
 
@@ -262,11 +261,9 @@ class TestSNSExtendedClient(unittest.TestCase):
             SMALL_MSG_ATTRIBUTES, SMALL_MSG_BODY, None
         )
 
-        expected_msg_attr = loads(dumps(SMALL_MSG_ATTRIBUTES))
-        expected_msg_attr[RESERVED_ATTRIBUTE_NAME] = {
-            "DataType": "Number",
-            "StringValue": str(len(SMALL_MSG_BODY.encode())),
-        }
+        expected_msg_attr = self.make_expected_message_attribute(
+            SMALL_MSG_ATTRIBUTES, SMALL_MSG_BODY, RESERVED_ATTRIBUTE_NAME
+        )
 
         self.assertEqual(expected_msg_attr, actual_msg_attr)
 
@@ -285,18 +282,16 @@ class TestSNSExtendedClient(unittest.TestCase):
         """Test reduced message size threshold message published to S3"""
         sns_extended_client = self.sns_extended_client
 
-        sns_extended_client.message_size_threshold = 32
+        sns_extended_client.message_size_threshold = 128
         small_msg = "x" * (sns_extended_client.message_size_threshold + 1)
 
         actual_msg_attr, actual_msg_body = sns_extended_client._make_payload(
             {}, small_msg, None
         )
 
-        expected_msg_attr = {}
-        expected_msg_attr[RESERVED_ATTRIBUTE_NAME] = {
-            "DataType": "Number",
-            "StringValue": str(len(small_msg.encode())),
-        }
+        expected_msg_attr = self.make_expected_message_attribute(
+            {}, small_msg, RESERVED_ATTRIBUTE_NAME
+        )
 
         self.assertEqual(expected_msg_attr, actual_msg_attr)
 
@@ -320,11 +315,21 @@ class TestSNSExtendedClient(unittest.TestCase):
             SMALL_MSG_ATTRIBUTES, LARGE_MSG_BODY, None
         )
 
-        expected_msg_attr = loads(dumps(SMALL_MSG_ATTRIBUTES))
-        expected_msg_attr[LEGACY_RESERVED_ATTRIBUTE_NAME] = {
-            "DataType": "Number",
-            "StringValue": str(len(LARGE_MSG_BODY.encode())),
-        }
+        expected_msg_attr = self.make_expected_message_attribute(
+            SMALL_MSG_ATTRIBUTES, LARGE_MSG_BODY, LEGACY_RESERVED_ATTRIBUTE_NAME
+        )
+
+        self.assertEqual(expected_msg_attr, actual_msg_attr)
+
+    def test_make_payload_adds_language_message_attribute(self):
+        """Test extended payload messages use the Language Message Attribute for empty message attributes"""
+        sns_extended_client = self.sns_extended_client
+
+        actual_msg_attr, _ = sns_extended_client._make_payload({}, LARGE_MSG_BODY, None)
+
+        expected_msg_attr = self.make_expected_message_attribute(
+            {}, LARGE_MSG_BODY, RESERVED_ATTRIBUTE_NAME
+        )
 
         self.assertEqual(expected_msg_attr, actual_msg_attr)
 
@@ -355,6 +360,10 @@ class TestSNSExtendedClient(unittest.TestCase):
         expected_msg_attr[RESERVED_ATTRIBUTE_NAME] = {
             "DataType": "Number",
             "StringValue": str(len(LARGE_MSG_BODY.encode())),
+        }
+        expected_msg_attr[LANGUAGE_ATTRIBUTE_NAME] = {
+            "DataType": "String",
+            "StringValue": CLIENT_LANGUAGE,
         }
 
         self.assertEqual(expected_msg_attr, actual_msg_attr)
@@ -421,13 +430,24 @@ class TestSNSExtendedClient(unittest.TestCase):
         sns_extended_client = self.sns_extended_client
         sns_extended_client.always_through_s3 = True
 
-        self.assertRaises(SNSExtendedClientException, sns_extended_client.publish, TopicArn='',Message='{"key": "value"}', MessageStructure="json")
+        self.assertRaises(
+            SNSExtendedClientException,
+            sns_extended_client.publish,
+            TopicArn="",
+            Message='{"key": "value"}',
+            MessageStructure="json",
+        )
 
     def test_missing_topic_arn(self):
         """Test publish raises Exception when publishing without a topic ARN to publish"""
         sns_extended_client = self.sns_extended_client
 
-        self.assertRaises(SNSExtendedClientException, sns_extended_client.publish, Message=SMALL_MSG_BODY, MessageAttributes=SMALL_MSG_ATTRIBUTES)
+        self.assertRaises(
+            SNSExtendedClientException,
+            sns_extended_client.publish,
+            Message=SMALL_MSG_BODY,
+            MessageAttributes=SMALL_MSG_ATTRIBUTES,
+        )
 
     def has_msg_body(self, messages, expected_msg_body, extended_payload=False):
         """Checks for target message_body in the list of messages from SQS queue"""
@@ -447,6 +467,21 @@ class TestSNSExtendedClient(unittest.TestCase):
                 continue
 
         return False
+
+    def make_expected_message_attribute(
+        self, base_attributes, message, reserved_attribute
+    ):
+
+        expected_msg_attr = loads(dumps(base_attributes))
+        expected_msg_attr[reserved_attribute] = {
+            "DataType": "Number",
+            "StringValue": str(len(message.encode())),
+        }
+        expected_msg_attr[LANGUAGE_ATTRIBUTE_NAME] = {
+            "DataType": "String",
+            "StringValue": CLIENT_LANGUAGE,
+        }
+        return expected_msg_attr
 
     def has_msg_attributes(self, messages, message_attributes_to_compare):
         """Checks for target message_attributes in the list of messages from SQS queue"""

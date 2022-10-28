@@ -10,8 +10,10 @@ MESSAGE_POINTER_CLASS = "software.amazon.payloadoffloading.PayloadS3Pointer"
 LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize"
 RESERVED_ATTRIBUTE_NAME = "ExtendedPayloadSize"
 S3_KEY_ATTRIBUTE_NAME = "S3Key"
+LANGUAGE_ATTRIBUTE_NAME = "Language"
+CLIENT_LANGUAGE = "Python"
 MULTIPLE_PROTOCOL_MESSAGE_STRUCTURE = "json"
-MAX_ALLOWED_ATTRIBUTES = 10 - 1  # 10 for SQS and 1 reserved attribute
+MAX_ALLOWED_ATTRIBUTES = 10 - 1 - 1 # 10 for SQS, 1 reserved attribute and 1 Language attribute
 
 
 def _delete_large_payload_support(self):
@@ -179,6 +181,9 @@ def _make_payload(
         message_attributes[attribute_name_used] = {}
         message_attributes[attribute_name_used]["DataType"] = "Number"
         message_attributes[attribute_name_used]["StringValue"] = str(len(encoded_body))
+
+        # Language Attribute
+        message_attributes[LANGUAGE_ATTRIBUTE_NAME] = {"DataType": "String", "StringValue": CLIENT_LANGUAGE}
 
         self._check_message_attributes(message_attributes)
         self._check_size_of_message_attributes(message_attributes)
