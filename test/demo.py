@@ -6,6 +6,7 @@ s3_extended_payload_bucket = "extended-client-bucket-store"  # S3 bucket with th
 TOPIC_NAME = "---TOPIC-NAME---"
 QUEUE_NAME = "---QUEUE-NAME---"
 
+
 def get_msg_from_s3(body):
     """Handy Helper to fetch message from S3"""
     json_msg = loads(body)

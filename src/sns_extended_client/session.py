@@ -10,10 +10,10 @@ MESSAGE_POINTER_CLASS = "software.amazon.payloadoffloading.PayloadS3Pointer"
 LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize"
 RESERVED_ATTRIBUTE_NAME = "ExtendedPayloadSize"
 S3_KEY_ATTRIBUTE_NAME = "S3Key"
-LANGUAGE_ATTRIBUTE_NAME = "Language"
-CLIENT_LANGUAGE = "Python"
 MULTIPLE_PROTOCOL_MESSAGE_STRUCTURE = "json"
-MAX_ALLOWED_ATTRIBUTES = 10 - 1 - 1 # 10 for SQS, 1 reserved attribute and 1 Language attribute
+MAX_ALLOWED_ATTRIBUTES = (
+    10 - 1
+)  # 10 for SQS and 1 reserved attribute
 
 
 def _delete_large_payload_support(self):
@@ -66,7 +66,7 @@ def _get_always_through_s3(self):
 def _set_always_through_s3(self, always_through_s3: bool):
     if not isinstance(always_through_s3, bool):
         raise TypeError(f"Not a Valid boolean value: {always_through_s3}")
-    if always_through_s3 and not self.large_payload_support:
+    if always_through_s3 and not getattr(self, "large_payload_support", ""):
         raise MissingPayloadOffloadingResource()
     setattr(self, "__always_through_s3", always_through_s3)
 
@@ -152,9 +152,11 @@ def _create_s3_put_object_params(self, encoded_body: bytes):
     return {"ACL": "private", "Body": encoded_body, "ContentLength": len(encoded_body)}
 
 
-def _make_payload(
-    self, message_attributes: dict, message_body, message_structure: str
-):
+def _create_reserved_message_attribute_value(self, encoded_body_size_string):
+    return {"DataType": "Number", "StringValue": encoded_body_size_string}
+
+
+def _make_payload(self, message_attributes: dict, message_body, message_structure: str):
     message_attributes = loads(dumps(message_attributes))
     encoded_body = message_body.encode()
     if self.large_payload_support and (
@@ -178,12 +180,10 @@ def _make_payload(
             if self.use_legacy_attribute
             else RESERVED_ATTRIBUTE_NAME
         )
-        message_attributes[attribute_name_used] = {}
-        message_attributes[attribute_name_used]["DataType"] = "Number"
-        message_attributes[attribute_name_used]["StringValue"] = str(len(encoded_body))
 
-        # Language Attribute
-        message_attributes[LANGUAGE_ATTRIBUTE_NAME] = {"DataType": "String", "StringValue": CLIENT_LANGUAGE}
+        message_attributes[
+            attribute_name_used
+        ] = self._create_reserved_message_attribute_value(str(len(encoded_body)))
 
         self._check_message_attributes(message_attributes)
         self._check_size_of_message_attributes(message_attributes)
@@ -228,6 +228,9 @@ def _add_custom_attributes(class_attributes: dict):
     class_attributes["s3"] = property(_get_s3, _set_s3, _delete_s3)
 
     class_attributes["_create_s3_put_object_params"] = _create_s3_put_object_params
+    class_attributes[
+        "_create_reserved_message_attribute_value"
+    ] = _create_reserved_message_attribute_value
     class_attributes["_is_large_message"] = _is_large_message
     class_attributes["_make_payload"] = _make_payload
     class_attributes["_get_s3_key"] = _get_s3_key
@@ -252,7 +255,11 @@ def _add_platform_endpoint_resource_custom_attributes(class_attributes, **kwargs
 
 def _publish_decorator(func):
     def _publish(self, **kwargs):
-        if "TopicArn" not in kwargs and "TargetArn" not in kwargs and not getattr(self, "arn", False):
+        if (
+            "TopicArn" not in kwargs
+            and "TargetArn" not in kwargs
+            and not getattr(self, "arn", False)
+        ):
             raise SNSExtendedClientException(
                 "Missing TopicArn: TopicArn is a required argument!"
             )

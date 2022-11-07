@@ -12,8 +12,6 @@ from src.sns_extended_client.session import (
     LEGACY_RESERVED_ATTRIBUTE_NAME,
     MAX_ALLOWED_ATTRIBUTES,
     SNSExtendedClientSession,
-    LANGUAGE_ATTRIBUTE_NAME,
-    CLIENT_LANGUAGE,
 )
 from src.sns_extended_client.exceptions import SNSExtendedClientException
 from moto import mock_s3, mock_sns, mock_sqs
@@ -361,10 +359,6 @@ class TestSNSExtendedClient(unittest.TestCase):
             "DataType": "Number",
             "StringValue": str(len(LARGE_MSG_BODY.encode())),
         }
-        expected_msg_attr[LANGUAGE_ATTRIBUTE_NAME] = {
-            "DataType": "String",
-            "StringValue": CLIENT_LANGUAGE,
-        }
 
         self.assertEqual(expected_msg_attr, actual_msg_attr)
         self.assertEqual(expected_msg_body, actual_msg_body)
@@ -476,10 +470,6 @@ class TestSNSExtendedClient(unittest.TestCase):
         expected_msg_attr[reserved_attribute] = {
             "DataType": "Number",
             "StringValue": str(len(message.encode())),
-        }
-        expected_msg_attr[LANGUAGE_ATTRIBUTE_NAME] = {
-            "DataType": "String",
-            "StringValue": CLIENT_LANGUAGE,
         }
         return expected_msg_attr
 
