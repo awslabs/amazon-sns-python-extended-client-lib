@@ -1,4 +1,5 @@
 from boto3 import resource
+import botocore.session
 import boto3
 from json import dumps, loads
 from uuid import uuid4
@@ -11,9 +12,7 @@ LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize"
 RESERVED_ATTRIBUTE_NAME = "ExtendedPayloadSize"
 S3_KEY_ATTRIBUTE_NAME = "S3Key"
 MULTIPLE_PROTOCOL_MESSAGE_STRUCTURE = "json"
-MAX_ALLOWED_ATTRIBUTES = (
-    10 - 1
-)  # 10 for SQS and 1 reserved attribute
+MAX_ALLOWED_ATTRIBUTES = 10 - 1  # 10 for SQS and 1 reserved attribute
 
 
 def _delete_large_payload_support(self):
@@ -284,6 +283,16 @@ class SNSExtendedClientSession(boto3.session.Session):
         botocore_session=None,
         profile_name=None,
     ):
+        if botocore_session is None:
+            botocore_session = botocore.session.get_session()
+
+        user_agent_header = self.__class__.__name__
+
+        if botocore_session.user_agent_extra:
+            botocore_session.user_agent_extra += " " + user_agent_header
+        else:
+            self._session.user_agent_extra = user_agent_header
+
         super().__init__(
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
