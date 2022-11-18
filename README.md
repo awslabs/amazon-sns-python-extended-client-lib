@@ -18,6 +18,7 @@ sns-extended-client allows for publishing large messages through SNS via S3. Thi
 
 ## Additional attributes available on `boto3` SNS `client`, `Topic` and `PlatformEndpoint` objects.
 * large_payload_support -- the S3 bucket name that will store large messages.
+* use_legacy_attribute -- if `True`, then all published messages use the Legacy reserved message attribute (SQSLargePayloadSize) instead of the current reserved message attribute (ExtendedPayloadSize).
 * message_size_threshold -- the threshold for storing the message in the large messages bucket. Cannot be less than `0` or greater than `262144`. Defaults to `262144`.
 * always_through_s3 -- if `True`, then all messages will be serialized to S3. Defaults to `False`
 * s3 -- the boto3 S3 `resource` object to use to store objects to S3. Use this if you want to control the S3 resource (for example, custom S3 config or credentials). Defaults to `boto3.resource("s3")` on first use if not previously set.
@@ -160,8 +161,10 @@ platform_endpoint.s3 = boto3.resource(
 )
 ```
 
+### Setting a custom S3 Key
 Publish Message Supports user defined S3 Key used to store objects in the specified Bucket.
-To use custom keys add the S3 key as a Message Attribute in the MessageAttributes argument with the MessageAttribute 
+
+To use custom keys add the S3 key as a Message Attribute in the MessageAttributes argument with the MessageAttribute.
 
 **Key - "S3Key"**
 ```python
@@ -171,11 +174,47 @@ sns.publish(
     MessageAttributes={
         "S3Key": {
             "DataType": "String",
-            "StringValue": "347c11c4-a22c-42e4-a6a2-9b5af5b76587",
+            "StringValue": "--S3--Key--",
         }
     },
 )
 ```
+
+### Using SQSLargePayloadSize as reserved message attribute
+Initial versions of the Java SNS Extended Client used 'SQSLargePayloadSize' as the reserved message attribute to determine that a message is an S3 message.
+
+In the later versions it was changed to use 'ExtendedPayloadSize'.
+
+To use the Legacy reserved message attribute set use_legacy_attribute parameter to `True`.
+
+```python
+import boto3
+import sns_extended_client
+
+# Low level client
+sns = boto3.client('sns')
+sns.large_payload_support = 'bucket-name'
+
+sns.use_legacy_attribute = True
+
+# boto SNS.Topic resource
+resource = boto3.resource('sns')
+topic = resource.Topic('topic-arn')
+
+# Or
+topic = resource.create_topic(Name='topic-name')
+
+topic.large_payload_support = 'my-bucket-name'
+topic.use_legacy_attribute = True
+
+# boto SNS.PlatformEndpoint resource
+resource = boto3.resource('sns')
+platform_endpoint = resource.PlatformEndpoint('endpoint-arn')
+
+platform_endpoint.large_payload_support = 'my-bucket-name'
+platform_endpoint.use_legacy_attribute = True 
+```
+
 ## CODE SAMPLE
 Here is an example of using the extended payload utility:
 

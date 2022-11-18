@@ -127,10 +127,10 @@ def _check_size_of_message_attributes(self, message_attributes: dict):
         if "BinaryValue" in value:
             total = total + len(value["BinaryValue"])
 
-        if total > self.message_size_threshold:
-            raise SNSExtendedClientException(
-                f"Message attributes size is greater than the message size threshold: {self.message_size_threshold} consider including payload in the message body"
-            )
+    if total > self.message_size_threshold:
+        raise SNSExtendedClientException(
+            f"Message attributes size is greater than the message size threshold: {self.message_size_threshold} consider including payload in the message body"
+        )
 
 
 def _check_message_attributes(self, message_attributes: dict):
@@ -165,8 +165,10 @@ def _make_payload(self, message_attributes: dict, message_body, message_structur
 
         if message_structure == "json":
             raise SNSExtendedClientException(
-                "SNS extended client does not support sending JSON messages for large/payload backed messages."
+                "SNS extended client does not support sending JSON messages."
             )
+
+        self._check_message_attributes(message_attributes)
 
         for attribute in (RESERVED_ATTRIBUTE_NAME, LEGACY_RESERVED_ATTRIBUTE_NAME):
             if attribute in message_attributes:
@@ -184,7 +186,6 @@ def _make_payload(self, message_attributes: dict, message_body, message_structur
             attribute_name_used
         ] = self._create_reserved_message_attribute_value(str(len(encoded_body)))
 
-        self._check_message_attributes(message_attributes)
         self._check_size_of_message_attributes(message_attributes)
 
         s3_key = self._get_s3_key(message_attributes)
@@ -192,8 +193,6 @@ def _make_payload(self, message_attributes: dict, message_body, message_structur
         self.s3.Object(self.large_payload_support, s3_key).put(
             **self._create_s3_put_object_params(encoded_body)
         )
-
-        self._check_size_of_message_attributes(message_attributes)
 
         message_body = dumps(
             [
@@ -260,7 +259,7 @@ def _publish_decorator(func):
             and not getattr(self, "arn", False)
         ):
             raise SNSExtendedClientException(
-                "Missing TopicArn: TopicArn is a required argument!"
+                "Missing TopicArn: TopicArn is a required feild."
             )
 
         kwargs["MessageAttributes"], kwargs["Message"] = self._make_payload(
@@ -288,10 +287,11 @@ class SNSExtendedClientSession(boto3.session.Session):
 
         user_agent_header = self.__class__.__name__
 
+        # Attaching SNSExtendedClient Session to the HTTP headers
         if botocore_session.user_agent_extra:
             botocore_session.user_agent_extra += " " + user_agent_header
         else:
-            self._session.user_agent_extra = user_agent_header
+            botocore_session.user_agent_extra = user_agent_header
 
         super().__init__(
             aws_access_key_id=aws_access_key_id,
