@@ -45,13 +45,13 @@ topic = resource.Topic('topic-arn')
 # Or
 topic = resource.create_topic(Name='topic-name')
 
-topic.large_payload_support = 'my-bucket-name'
+topic.large_payload_support = 'bucket-name'
 
 # boto SNS.PlatformEndpoint resource
 resource = boto3.resource('sns')
 platform_endpoint = resource.PlatformEndpoint('endpoint-arn')
 
-platform_endpoint.large_payload_support = 'my-bucket-name'
+platform_endpoint.large_payload_support = 'bucket-name'
 ```
 
 ### Enabling support for large payloads (>64K)
@@ -61,7 +61,7 @@ import sns_extended_client
 
 # Low level client
 sns = boto3.client('sns')
-sns.large_payload_support = 'BUCKET-NAME'
+sns.large_payload_support = 'bucket-name'
 sns.message_size_threshold = 65536
 
 # boto SNS.Topic resource
@@ -78,7 +78,7 @@ topic.message_size_threshold = 65536
 resource = boto3.resource('sns')
 platform_endpoint = resource.PlatformEndpoint('endpoint-arn')
 
-platform_endpoint.large_payload_support = 'my-bucket-name'
+platform_endpoint.large_payload_support = 'bucket-name'
 platform_endpoint.message_size_threshold = 65536
 ```
 ### Enabling support for large payloads for all messages
@@ -88,7 +88,7 @@ import sns_extended_client
 
 # Low level client
 sns = boto3.client('sns')
-sns.large_payload_support = 'my-bucket-name'
+sns.large_payload_support = 'bucket-name'
 sns.always_through_s3 = True
 
 # boto SNS.Topic resource
@@ -98,14 +98,14 @@ topic = resource.Topic('topic-arn')
 # Or
 topic = resource.create_topic(Name='topic-name')
 
-topic.large_payload_support = 'my-bucket-name'
+topic.large_payload_support = 'bucket-name'
 topic.always_through_s3 = True
 
 # boto SNS.PlatformEndpoint resource
 resource = boto3.resource('sns')
 platform_endpoint = resource.PlatformEndpoint('endpoint-arn')
 
-platform_endpoint.large_payload_support = 'my-bucket-name'
+platform_endpoint.large_payload_support = 'bucket-name'
 platform_endpoint.always_through_s3 = True
 ```
 ### Setting a custom S3 resource
@@ -116,7 +116,7 @@ import sns_extended_client
 
 # Low level client
 sns = boto3.client('sns')
-sns.large_payload_support = 'my-bucket-name'
+sns.large_payload_support = 'bucket-name'
 sns.s3 = boto3.resource(
   's3', 
   config=Config(
@@ -134,7 +134,7 @@ topic = resource.Topic('topic-arn')
 # Or
 topic = resource.topic(Name='topic-name')
 
-topic.large_payload_support = 'my-bucket-name'
+topic.large_payload_support = 'bucket-name'
 topic.s3 = boto3.resource(
   's3', 
   config=Config(
@@ -149,7 +149,7 @@ topic.s3 = boto3.resource(
 resource = boto3.resource('sns')
 platform_endpoint = resource.PlatformEndpoint('endpoint-arn')
 
-platform_endpoint.large_payload_support = 'my-bucket-name'
+platform_endpoint.large_payload_support = 'bucket-name'
 platform_endpoint.s3 = boto3.resource(
   's3', 
   config=Config(
@@ -204,14 +204,14 @@ topic = resource.Topic('topic-arn')
 # Or
 topic = resource.create_topic(Name='topic-name')
 
-topic.large_payload_support = 'my-bucket-name'
+topic.large_payload_support = 'bucket-name'
 topic.use_legacy_attribute = True
 
 # boto SNS.PlatformEndpoint resource
 resource = boto3.resource('sns')
 platform_endpoint = resource.PlatformEndpoint('endpoint-arn')
 
-platform_endpoint.large_payload_support = 'my-bucket-name'
+platform_endpoint.large_payload_support = 'bucket-name'
 platform_endpoint.use_legacy_attribute = True 
 ```
 
