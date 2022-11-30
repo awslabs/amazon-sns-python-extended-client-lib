@@ -224,7 +224,7 @@ class TestSNSExtendedClient(unittest.TestCase):
         self.assertEqual(actual_msg_body, expected_msg_body)
         self.assertEqual(actual_msg_attr, expected_msg_attributes)
 
-    def test__make_payload_large_msg(self):
+    def test_make_payload_large_msg(self):
         """Test publish method uses the output from the make_payload method call large msg"""
         sns_extended_client = self.sns_extended_client
 
@@ -319,18 +319,6 @@ class TestSNSExtendedClient(unittest.TestCase):
 
         self.assertEqual(expected_msg_attr, actual_msg_attr)
 
-    def test_make_payload_adds_language_message_attribute(self):
-        """Test extended payload messages use the Language Message Attribute for empty message attributes"""
-        sns_extended_client = self.sns_extended_client
-
-        actual_msg_attr, _ = sns_extended_client._make_payload({}, LARGE_MSG_BODY, None)
-
-        expected_msg_attr = self.make_expected_message_attribute(
-            {}, LARGE_MSG_BODY, RESERVED_ATTRIBUTE_NAME
-        )
-
-        self.assertEqual(expected_msg_attr, actual_msg_attr)
-
     def test_make_payload_use_custom_S3_key(self):
         """Test to verify custom S3 key is used to store message in S3 bucket"""
         sns_extended_client = self.sns_extended_client
@@ -384,7 +372,7 @@ class TestSNSExtendedClient(unittest.TestCase):
             many_message_attributes,
         )
 
-    def test_check_message_attributes_too_many_attributes(self):
+    def test_check_message_attributes_size(self):
         """Test _check_size_of_message_attributes method raises Exception when invoked with big total size of message_attributes"""
         sns_extended_client = self.sns_extended_client
 
