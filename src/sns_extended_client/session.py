@@ -8,6 +8,7 @@ from .exceptions import SNSExtendedClientException, MissingPayloadOffloadingReso
 
 DEFAULT_MESSAGE_SIZE_THRESHOLD = 262144
 MESSAGE_POINTER_CLASS = "software.amazon.payloadoffloading.PayloadS3Pointer"
+LEGACY_MESSAGE_POINTER_CLASS = "com.amazon.sqs.javamessaging.MessageS3Pointer"
 LEGACY_RESERVED_ATTRIBUTE_NAME = "SQSLargePayloadSize"
 RESERVED_ATTRIBUTE_NAME = "ExtendedPayloadSize"
 S3_KEY_ATTRIBUTE_NAME = "S3Key"
@@ -176,6 +177,12 @@ def _make_payload(self, message_attributes: dict, message_body, message_structur
                     f"Message attribute name {attribute} is reserved for use by SNS extended client."
                 )
 
+        message_pointer_used = (
+            LEGACY_MESSAGE_POINTER_CLASS
+            if self.use_legacy_attribute
+            else MESSAGE_POINTER_CLASS
+        )
+
         attribute_name_used = (
             LEGACY_RESERVED_ATTRIBUTE_NAME
             if self.use_legacy_attribute
@@ -196,7 +203,7 @@ def _make_payload(self, message_attributes: dict, message_body, message_structur
 
         message_body = dumps(
             [
-                MESSAGE_POINTER_CLASS,
+                message_pointer_used,
                 {"s3BucketName": self.large_payload_support, "s3Key": s3_key},
             ]
         )
