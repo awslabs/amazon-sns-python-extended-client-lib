@@ -8,6 +8,7 @@ from json import JSONDecodeError, loads, dumps
 from src.sns_extended_client.session import (
     DEFAULT_MESSAGE_SIZE_THRESHOLD,
     MESSAGE_POINTER_CLASS,
+    LEGACY_MESSAGE_POINTER_CLASS,
     RESERVED_ATTRIBUTE_NAME,
     LEGACY_RESERVED_ATTRIBUTE_NAME,
     MAX_ALLOWED_ATTRIBUTES,
@@ -309,7 +310,7 @@ class TestSNSExtendedClient(unittest.TestCase):
         sns_extended_client = self.sns_extended_client
         sns_extended_client.use_legacy_attribute = True
 
-        actual_msg_attr, _ = sns_extended_client._make_payload(
+        actual_msg_attr, actual_msg_body = sns_extended_client._make_payload(
             SMALL_MSG_ATTRIBUTES, LARGE_MSG_BODY, None
         )
 
@@ -317,6 +318,7 @@ class TestSNSExtendedClient(unittest.TestCase):
             SMALL_MSG_ATTRIBUTES, LARGE_MSG_BODY, LEGACY_RESERVED_ATTRIBUTE_NAME
         )
 
+        self.assertEqual(loads(actual_msg_body)[0], LEGACY_MESSAGE_POINTER_CLASS)
         self.assertEqual(expected_msg_attr, actual_msg_attr)
 
     def test_make_payload_use_custom_S3_key(self):
