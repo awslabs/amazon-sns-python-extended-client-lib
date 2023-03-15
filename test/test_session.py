@@ -1,23 +1,22 @@
 import os
 import unittest
-import pytest
 import uuid
-import boto3
-
-from json import JSONDecodeError, loads, dumps
-from src.sns_extended_client.session import (
-    DEFAULT_MESSAGE_SIZE_THRESHOLD,
-    MESSAGE_POINTER_CLASS,
-    LEGACY_MESSAGE_POINTER_CLASS,
-    RESERVED_ATTRIBUTE_NAME,
-    LEGACY_RESERVED_ATTRIBUTE_NAME,
-    MAX_ALLOWED_ATTRIBUTES,
-    SNSExtendedClientSession,
-)
-from src.sns_extended_client.exceptions import SNSExtendedClientException
-from moto import mock_s3, mock_sns, mock_sqs
+from json import JSONDecodeError, dumps, loads
 from unittest.mock import create_autospec
 
+import boto3
+from moto import mock_s3, mock_sns, mock_sqs
+
+from sns_extended_client.exceptions import SNSExtendedClientException
+from sns_extended_client.session import (
+    DEFAULT_MESSAGE_SIZE_THRESHOLD,
+    LEGACY_MESSAGE_POINTER_CLASS,
+    LEGACY_RESERVED_ATTRIBUTE_NAME,
+    MAX_ALLOWED_ATTRIBUTES,
+    MESSAGE_POINTER_CLASS,
+    RESERVED_ATTRIBUTE_NAME,
+    SNSExtendedClientSession,
+)
 
 SMALL_MSG_BODY = "small message body"
 SMALL_MSG_ATTRIBUTES = {"test attr": {"DataType": "String", "StringValue": "str value"}}
@@ -67,16 +66,16 @@ class TestSNSExtendedClient(unittest.TestCase):
 
         # create sqs queue and subscribe to sns topic to test messages
         sqs = boto3.client("sqs", region_name=os.environ["AWS_DEFAULT_REGION"])
-        cls.test_queue_url = sqs.create_queue(QueueName=cls.test_queue_name).get(
-            "QueueUrl"
-        )
+        cls.test_queue_url = sqs.create_queue(QueueName=cls.test_queue_name).get("QueueUrl")
 
         test_queue_arn = sqs.get_queue_attributes(
             QueueUrl=cls.test_queue_url, AttributeNames=["QueueArn"]
         )["Attributes"].get("QueueArn")
 
         sns.subscribe(
-            TopicArn=cls.test_topic_arn, Protocol="sqs", Endpoint=test_queue_arn
+            TopicArn=cls.test_topic_arn,
+            Protocol="sqs",
+            Endpoint=test_queue_arn,
         )
 
         # shared queue resource
@@ -139,13 +138,12 @@ class TestSNSExtendedClient(unittest.TestCase):
         }  # to be compatible with SQS queue message format
 
         make_payload_mock = create_autospec(
-            sns_client._make_payload, return_value=(modified_msg_attr, modified_msg)
+            sns_client._make_payload,
+            return_value=(modified_msg_attr, modified_msg),
         )
 
         sns_client._make_payload = make_payload_mock
-        sns_client.publish(
-            TopicArn=self.test_topic_arn, MessageAttributes={}, Message="test"
-        )
+        sns_client.publish(TopicArn=self.test_topic_arn, MessageAttributes={}, Message="test")
         # verify the call to _make_payload
         make_payload_mock.assert_called_once_with({}, "test", None)
 
@@ -167,7 +165,8 @@ class TestSNSExtendedClient(unittest.TestCase):
         }  # to be compatible with SQS queue message format
 
         make_payload_mock = create_autospec(
-            topic_resource._make_payload, return_value=(modified_msg_attr, modified_msg)
+            topic_resource._make_payload,
+            return_value=(modified_msg_attr, modified_msg),
         )
 
         topic_resource._make_payload = make_payload_mock
@@ -184,9 +183,7 @@ class TestSNSExtendedClient(unittest.TestCase):
 
     def test_platform_endpoint_publish_calls_make_payload(self):
         """Test SNSExtendedSession PlatformEndpoint resource publish API call invokes _make_payload method to change the message and message attributes"""
-        platform_endpoint_resource = boto3.resource("sns").PlatformEndpoint(
-            self.test_topic_arn
-        )
+        platform_endpoint_resource = boto3.resource("sns").PlatformEndpoint(self.test_topic_arn)
 
         modified_msg_attr = {"dummy": {"StringValue": "dummy", "DataType": "String"}}
         modified_msg = "dummy msg"
@@ -284,9 +281,7 @@ class TestSNSExtendedClient(unittest.TestCase):
         sns_extended_client.message_size_threshold = 128
         small_msg = "x" * (sns_extended_client.message_size_threshold + 1)
 
-        actual_msg_attr, actual_msg_body = sns_extended_client._make_payload(
-            {}, small_msg, None
-        )
+        actual_msg_attr, actual_msg_body = sns_extended_client._make_payload({}, small_msg, None)
 
         expected_msg_attr = self.make_expected_message_attribute(
             {}, small_msg, RESERVED_ATTRIBUTE_NAME
@@ -315,7 +310,9 @@ class TestSNSExtendedClient(unittest.TestCase):
         )
 
         expected_msg_attr = self.make_expected_message_attribute(
-            SMALL_MSG_ATTRIBUTES, LARGE_MSG_BODY, LEGACY_RESERVED_ATTRIBUTE_NAME
+            SMALL_MSG_ATTRIBUTES,
+            LARGE_MSG_BODY,
+            LEGACY_RESERVED_ATTRIBUTE_NAME,
         )
 
         self.assertEqual(loads(actual_msg_body)[0], LEGACY_MESSAGE_POINTER_CLASS)
@@ -379,7 +376,10 @@ class TestSNSExtendedClient(unittest.TestCase):
         sns_extended_client = self.sns_extended_client
 
         large_message_attribute = {
-            "large_attribute": {"DataType": "String", "StringValue": LARGE_MSG_BODY}
+            "large_attribute": {
+                "DataType": "String",
+                "StringValue": LARGE_MSG_BODY,
+            }
         }
         self.assertRaises(
             SNSExtendedClientException,
@@ -438,9 +438,7 @@ class TestSNSExtendedClient(unittest.TestCase):
         for message in messages:
             try:
                 published_msg = (
-                    self.get_msg_from_s3(
-                        loads(loads(message.get("Body")).get("Message"))
-                    )
+                    self.get_msg_from_s3(loads(loads(message.get("Body")).get("Message")))
                     if extended_payload
                     else loads(message.get("Body")).get("Message")
                 )
@@ -452,10 +450,7 @@ class TestSNSExtendedClient(unittest.TestCase):
 
         return False
 
-    def make_expected_message_attribute(
-        self, base_attributes, message, reserved_attribute
-    ):
-
+    def make_expected_message_attribute(self, base_attributes, message, reserved_attribute):
         expected_msg_attr = loads(dumps(base_attributes))
         expected_msg_attr[reserved_attribute] = {
             "DataType": "Number",
@@ -476,7 +471,8 @@ class TestSNSExtendedClient(unittest.TestCase):
         """Fetches message from S3 object described in the json_msg of extended payload"""
         s3_client = boto3.client("s3")
         s3_object = s3_client.get_object(
-            Bucket=json_msg[1].get("s3BucketName"), Key=json_msg[1].get("s3Key")
+            Bucket=json_msg[1].get("s3BucketName"),
+            Key=json_msg[1].get("s3Key"),
         )
         msg = s3_object.get("Body").read().decode()
         return msg

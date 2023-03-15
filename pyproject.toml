@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "amazon-sns-extended-client"
+version = "0.1.1"
+description = "Python version of AWS SNS extended client to publish large payload message"
+authors = ["Tianlu Shi <tianls@amazon.com>"]
+license = "Apache-2.0"
+readme = "README.md"
+packages = [{include = "sns_extended_client", from="src"}]
+classifiers=[
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+boto3 = "^1.26.91"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2.2"
+pytest-cov = "^4.0.0"
+moto = "^4.1.4"
+black = "^23.1"
+flake8 = [
+  # https://github.com/python/importlib_metadata/issues/406
+  { version = "*", python="^3.7" },
+  { version = ">=5", python= ">=3.8"},
+]
+isort = [
+  { version = "5.11.5", python="^3.7" },
+  { version = "^5.11.6", python= ">=3.8"},
+]
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"
+ensure_newline_before_comments = true
+use_parentheses = true
+multi_line_output = 3
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
