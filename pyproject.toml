@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "amazon-sns-extended-client"
-version = "0.1.1"
+version = "0.1.0"
 description = "Python version of AWS SNS extended client to publish large payload message"
 authors = ["Tianlu Shi <tianls@amazon.com>"]
 license = "Apache-2.0"
