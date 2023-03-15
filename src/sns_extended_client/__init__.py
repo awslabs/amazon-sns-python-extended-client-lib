@@ -2,7 +2,6 @@ import boto3
 
 from .session import SNSExtendedClientSession
 
-
 # Monkey patch to use our Session object instead of boto3's
 boto3.session.Session = SNSExtendedClientSession
 
