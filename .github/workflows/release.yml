@@ -5,11 +5,15 @@ on:
     branches:
       - main
 
+env:
+  AWS_REGION: us-east-1
+
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      id-token: write
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
@@ -49,16 +53,32 @@ jobs:
       - name: Run pytest
         run: |
           poetry run pytest --cov=sns_extended_client test --cov-report term-missing
-      - name: Publish package on PyPI
-        if: steps.check-version.outputs.tag
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          user: __token__
-          password: ${{ secrets.PYPI_TOKEN }}
+          role-to-assume: ${{ vars.OIDC_ROLE_NAME }}
+          role-session-name: publishrolesession
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Retrieve TEST PYPI TOKEN from secretsmanager
+        id: get-test-pypi-token
+        if: "! steps.check-version.outputs.tag"
+        run: |
+          echo "token=$(aws secretsmanager get-secret-value --secret-id ${{ vars.TEST_PYPI_TOKEN_NAME }} | jq -r '.SecretString')" >> $GITHUB_OUTPUT
+      - name: Retrieve PYPI TOKEN from secretsmanager
+        id: get-pypi-token
+        if: steps.check-version.outputs.tag
+        run: |
+          echo "token=$(aws secretsmanager get-secret-value --secret-id ${{ vars.PYPI_TOKEN_NAME }} | jq -r '.SecretString')" >> $GITHUB_OUTPUT
       - name: Publish package on TestPyPI
         if: "! steps.check-version.outputs.tag"
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
+          password: ${{ steps.get-test-pypi-token.outputs.token }}
           repository_url: https://test.pypi.org/legacy/
+      - name: Publish package on PyPI
+        if: steps.check-version.outputs.tag
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ steps.get-pypi-token.outputs.token }}
