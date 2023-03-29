@@ -8,7 +8,7 @@
 * **Minimum requirements** -- Python 3.x (or later) and pip
 * **Download** -- Download the latest preview release or pick it up from pip:
 ```
-under construction
+pip install amazon-sns-extended-client
 ```
 
 
@@ -168,7 +168,6 @@ To use custom keys add the S3 key as a Message Attribute in the MessageAttribute
 
 **Key - "S3Key"**
 ```python
-sns = boto3.client('sns')
 sns.publish(
     Message="message",
     MessageAttributes={
@@ -224,7 +223,7 @@ We publish messages to the created Topic and print the published message from th
 
 ```python
 import boto3
-from src.sns_extended_client import SNSExtendedClientSession
+from sns_extended_client import SNSExtendedClientSession
 from json import loads
 
 s3_extended_payload_bucket = "extended-client-bucket-store"  # S3 bucket with the given bucket name is a resource which is created and accessible with the given AWS credentials
@@ -246,7 +245,7 @@ def fetch_and_print_from_sqs(sqs, queue_url):
     message = sqs.receive_message(
         QueueUrl=queue_url, MessageAttributeNames=["All"], MaxNumberOfMessages=1
     ).get("Messages")[0]
-    message_body = loads(message.get("Body")).get("Message")
+    message_body = message.get("Body")
     print("Published Message: {}".format(message_body))
     print("Message Stored in S3 Bucket is: {}\n".format(get_msg_from_s3(message_body)))
 
@@ -262,11 +261,12 @@ demo_queue_arn = sqs.get_queue_attributes(
     QueueUrl=demo_queue_url, AttributeNames=["QueueArn"]
 )["Attributes"].get("QueueArn")
 
-sns_extended_client.subscribe(
-    TopicArn=demo_topic_arn, Protocol="sqs", Endpoint=demo_queue_arn
-)
+# Set the RawMessageDelivery subscription attribute to TRUE if you want to use
+# SQSExtendedClient to help with retrieving msg from S3
+sns_extended_client.subscribe(TopicArn=demo_topic_arn, Protocol="sqs", 
+Endpoint=demo_queue_arn, Attributes={"RawMessageDelivery":"true"})
 
-
+# Below is the example that all the messages will be sent to the S3 bucket
 sns_extended_client.large_payload_support = s3_extended_payload_bucket
 sns_extended_client.always_through_s3 = True
 sns_extended_client.publish(
@@ -275,6 +275,7 @@ sns_extended_client.publish(
 print("\n\nPublished using SNS extended client:")
 fetch_and_print_from_sqs(sqs, demo_queue_url)  # Prints message stored in s3
 
+# Below is the example that all the messages larger than 32 bytes will be sent to the S3 bucket
 print("\nUsing decreased message size threshold:")
 
 sns_extended_client.always_through_s3 = False
@@ -287,7 +288,7 @@ sns_extended_client.publish(
 fetch_and_print_from_sqs(sqs, demo_queue_url)  # Prints message stored in s3
 
 
-# publish message using the SNS.Topic resource
+# Below is the example to publish message using the SNS.Topic resource
 sns_extended_client_resource = SNSExtendedClientSession().resource(
     "sns", region_name="us-east-1"
 )
@@ -324,6 +325,15 @@ Message Stored in S3 Bucket is: This message should be published to S3 as it exc
 Published using Topic Resource:
 Published Message: ["software.amazon.payloadoffloading.PayloadS3Pointer", {"s3BucketName": "extended-client-bucket-store", "s3Key": "347c11c4-a22c-42e4-a6a2-9b5af5b76587"}]
 Message Stored in S3 Bucket is: This message should be published to S3 using the topic resource
+```
+
+## DEVELOPMENT
+
+We have built-in Makefile to run test, format check or fix in one command. Please check [Makefile](Makefile) for more information.
+
+Just run below command, and it will do format check and run unit test:
+```
+make ci
 ```
 
 ## Security
