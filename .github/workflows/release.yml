@@ -34,7 +34,7 @@ jobs:
       - name: Detect and tag new version
         id: check-version
         if: steps.check-parent-commit.outputs.sha
-        uses: salsify/action-detect-and-tag-new-version@v2
+        uses: salsify/action-detect-and-tag-new-version@b1778166f13188a9d478e2d1198f993011ba9864 # v2.0.3
         with:
           version-command: |
             bash -o pipefail -c "poetry version | awk '{ print \$2 }'"
@@ -54,7 +54,7 @@ jobs:
         run: |
           poetry run pytest --cov=sns_extended_client test --cov-report term-missing
       - name: configure aws credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@5fd3084fc36e372ff1fff382a39b10d03659f355 # v2.2.0
         with:
           role-to-assume: ${{ vars.OIDC_ROLE_NAME }}
           role-session-name: publishrolesession
@@ -71,14 +71,14 @@ jobs:
           echo "token=$(aws secretsmanager get-secret-value --secret-id ${{ vars.PYPI_TOKEN_NAME }} | jq -r '.SecretString')" >> $GITHUB_OUTPUT
       - name: Publish package on TestPyPI
         if: "! steps.check-version.outputs.tag"
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@f8c70e705ffc13c3b4d1221169b84f12a75d6ca8 # release/v1
         with:
           user: __token__
           password: ${{ steps.get-test-pypi-token.outputs.token }}
           repository_url: https://test.pypi.org/legacy/
       - name: Publish package on PyPI
         if: steps.check-version.outputs.tag
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@f8c70e705ffc13c3b4d1221169b84f12a75d6ca8 # release/v1
         with:
           user: __token__
           password: ${{ steps.get-pypi-token.outputs.token }}
