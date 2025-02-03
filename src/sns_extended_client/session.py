@@ -2,8 +2,12 @@ from json import dumps, loads
 from uuid import uuid4
 
 import boto3
+
 import botocore.session
-from boto3 import resource
+
+import logging
+logger = logging.getLogger("sns_extended_client.client")
+logger.setLevel(logging.WARNING)
 
 from .exceptions import MissingPayloadOffloadingResource, SNSExtendedClientException
 
@@ -85,23 +89,6 @@ def _set_use_legacy_attribute(self, use_legacy_attribute: bool):
     setattr(self, "__use_legacy_attribute", use_legacy_attribute)
 
 
-def _delete_s3(self):
-    if hasattr(self, "__s3"):
-        del self.__s3
-
-
-def _get_s3(self):
-    s3 = getattr(self, "__s3", None)
-    if not s3:
-        s3 = resource("s3")
-        self.s3 = s3
-    return s3
-
-
-def _set_s3(self, s3):
-    setattr(self, "__s3", s3)
-
-
 def _is_large_message(self, attributes: dict, encoded_body: bytes):
     total = 0
     for key, value in attributes.items():
@@ -147,14 +134,6 @@ def _get_s3_key(self, message_attributes: dict):
     return str(uuid4())
 
 
-def _create_s3_put_object_params(self, encoded_body: bytes):
-    return {
-        "ACL": "private",
-        "Body": encoded_body,
-        "ContentLength": len(encoded_body),
-    }
-
-
 def _create_reserved_message_attribute_value(self, encoded_body_size_string):
     return {"DataType": "Number", "StringValue": encoded_body_size_string}
 
@@ -197,9 +176,7 @@ def _make_payload(self, message_attributes: dict, message_body, message_structur
 
         s3_key = self._get_s3_key(message_attributes)
 
-        self.s3.Object(self.large_payload_support, s3_key).put(
-            **self._create_s3_put_object_params(encoded_body)
-        )
+        self.s3_client.put_object(Bucket=self.large_payload_support, Key=s3_key, Body=encoded_body)
 
         message_body = dumps(
             [
@@ -209,53 +186,6 @@ def _make_payload(self, message_attributes: dict, message_body, message_structur
         )
 
     return message_attributes, message_body
-
-
-def _add_custom_attributes(class_attributes: dict):
-    class_attributes["large_payload_support"] = property(
-        _get_large_payload_support,
-        _set_large_payload_support,
-        _delete_large_payload_support,
-    )
-    class_attributes["message_size_threshold"] = property(
-        _get_message_size_threshold,
-        _set_message_size_threshold,
-        _delete_messsage_size_threshold,
-    )
-    class_attributes["always_through_s3"] = property(
-        _get_always_through_s3,
-        _set_always_through_s3,
-        _delete_always_through_s3,
-    )
-    class_attributes["use_legacy_attribute"] = property(
-        _get_use_legacy_attribute,
-        _set_use_legacy_attribute,
-        _delete_use_legacy_attribute,
-    )
-    class_attributes["s3"] = property(_get_s3, _set_s3, _delete_s3)
-
-    class_attributes["_create_s3_put_object_params"] = _create_s3_put_object_params
-    class_attributes[
-        "_create_reserved_message_attribute_value"
-    ] = _create_reserved_message_attribute_value
-    class_attributes["_is_large_message"] = _is_large_message
-    class_attributes["_make_payload"] = _make_payload
-    class_attributes["_get_s3_key"] = _get_s3_key
-    class_attributes["_check_size_of_message_attributes"] = _check_size_of_message_attributes
-    class_attributes["_check_message_attributes"] = _check_message_attributes
-    class_attributes["publish"] = _publish_decorator(class_attributes["publish"])
-
-
-def _add_client_custom_attributes(base_classes, **kwargs):
-    _add_custom_attributes(kwargs["class_attributes"])
-
-
-def _add_topic_resource_custom_attributes(class_attributes, **kwargs):
-    _add_custom_attributes(class_attributes)
-
-
-def _add_platform_endpoint_resource_custom_attributes(class_attributes, **kwargs):
-    _add_custom_attributes(class_attributes)
 
 
 def _publish_decorator(func):
@@ -270,14 +200,39 @@ def _publish_decorator(func):
         kwargs["MessageAttributes"], kwargs["Message"] = self._make_payload(
             kwargs.get("MessageAttributes", {}),
             kwargs["Message"],
-            kwargs.get("MessageStructure", None),
+            kwargs.get("MessageStructure",None),
         )
         return func(self, **kwargs)
 
     return _publish
 
 
+
 class SNSExtendedClientSession(boto3.session.Session):
+
+    """ 
+    A session stores configuration state and allows you to create service
+    clients and resources. SNSExtendedClientSession extends the functionality 
+    of the boto3 Session object by using the .register event functionality. 
+        
+    :type aws_access_key_id: string
+    :param aws_access_key_id: AWS access key ID
+    :type aws_secret_access_key: string
+    :param aws_secret_access_key: AWS secret access key
+    :type aws_session_token: string
+    :param aws_session_token: AWS temporary session token
+    :type region_name: string
+    :param region_name: Default region when creating new connections
+    :type botocore_session: botocore.session.Session
+    :param botocore_session: Use this Botocore session instead of creating
+                             a new default one.
+    :type profile_name: string
+    :param profile_name: The name of a profile to use. If not given, then
+                         the default profile is used.
+            
+    """
+
+
     def __init__(
         self,
         aws_access_key_id=None,
@@ -288,31 +243,78 @@ class SNSExtendedClientSession(boto3.session.Session):
         profile_name=None,
     ):
         if botocore_session is None:
-            botocore_session = botocore.session.get_session()
-
-        user_agent_header = self.__class__.__name__
-
-        # Attaching SNSExtendedClient Session to the HTTP headers
-        if botocore_session.user_agent_extra:
-            botocore_session.user_agent_extra += " " + user_agent_header
+            self._session = botocore.session.get_session()
         else:
-            botocore_session.user_agent_extra = user_agent_header
+            self._session = botocore_session
+
+        self.add_custom_user_agent()
+
+        
 
         super().__init__(
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
             aws_session_token=aws_session_token,
             region_name=region_name,
-            botocore_session=botocore_session,
+            botocore_session=self._session,
             profile_name=profile_name,
         )
 
-        self.events.register("creating-client-class.sns", _add_client_custom_attributes)
+        # Adding Additional attributes for sns Client, Topic and PlatformEndpoint Objects
+        self.events.register("creating-client-class.sns", self.add_custom_attributes)
         self.events.register(
             "creating-resource-class.sns.Topic",
-            _add_topic_resource_custom_attributes,
+            self.add_custom_attributes,
         )
         self.events.register(
             "creating-resource-class.sns.PlatformEndpoint",
-            _add_platform_endpoint_resource_custom_attributes,
+            self.add_custom_attributes,
         )
+    
+    def add_custom_user_agent(self):
+        # Attaching SNSExtendedClient Session to the HTTP headers
+
+        user_agent_header = self.__class__.__name__
+
+        if self._session.user_agent_extra:
+            self._session.user_agent_extra += " " + user_agent_header
+        else:
+            self._session.user_agent_extra = user_agent_header
+
+    def add_custom_attributes(self,class_attributes,**kwargs):
+
+        
+        class_attributes["large_payload_support"] = property(
+        _get_large_payload_support,
+        _set_large_payload_support,
+        _delete_large_payload_support,
+    )
+        class_attributes["message_size_threshold"] = property(
+            _get_message_size_threshold,
+            _set_message_size_threshold,
+            _delete_messsage_size_threshold,
+        )
+        class_attributes["always_through_s3"] = property(
+            _get_always_through_s3,
+            _set_always_through_s3,
+            _delete_always_through_s3,
+        )
+        class_attributes["use_legacy_attribute"] = property(
+            _get_use_legacy_attribute,
+            _set_use_legacy_attribute,
+            _delete_use_legacy_attribute,
+        )
+        class_attributes["s3_client"] = super().client("s3")
+
+        class_attributes[
+            "_create_reserved_message_attribute_value"
+        ] = _create_reserved_message_attribute_value
+        class_attributes["_is_large_message"] = _is_large_message
+        class_attributes["_make_payload"] = _make_payload
+        class_attributes["_get_s3_key"] = _get_s3_key
+
+        # Adding the S3 client to the object
+        
+        class_attributes["_check_size_of_message_attributes"] = _check_size_of_message_attributes
+        class_attributes["_check_message_attributes"] = _check_message_attributes
+        class_attributes["publish"] = _publish_decorator(class_attributes["publish"])
