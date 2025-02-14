@@ -9,7 +9,6 @@ import copy
 import logging
 
 
-
 def initialize_extended_client_attributes_through_s3(sns_extended_client):
     """
 
@@ -57,7 +56,7 @@ def create_allow_sns_to_write_to_sqs_policy_json(topicarn, queuearn):
 def publish_message_helper(sns_extended_client, topic_arn, message_body, message_attributes = None,message_group_id = None, message_deduplication_id = None, **kwargs):
     """
 
-    Acts as a helper for sending a message via the SNS Extended Client.
+    Acts as a helper for publishing a message via the SNS Extended Client.
 
     sns_extended_client: The SNS Extended Client
     topic_arn: The ARN associated with the SNS Topic
@@ -66,22 +65,21 @@ def publish_message_helper(sns_extended_client, topic_arn, message_body, message
 
     """
 
-    send_message_kwargs = {
+    publish_message_kwargs = {
         'TopicArn': topic_arn,
         'Message': message_body
     }
 
     if message_attributes:
-        send_message_kwargs['MessageAttributes'] = message_attributes
+        publish_message_kwargs['MessageAttributes'] = message_attributes
     
     if message_group_id:
-        send_message_kwargs['MessageGroupId'] = message_group_id
-        send_message_kwargs['MessageDeduplicationId'] = message_deduplication_id
+        publish_message_kwargs['MessageGroupId'] = message_group_id
+        publish_message_kwargs['MessageDeduplicationId'] = message_deduplication_id
 
+    logger.info("Publishing the message via the SNS Extended Client")
 
-    logger.info("Sending the message via the SNS Extended Client")
-
-    response = sns_extended_client.publish(**send_message_kwargs)
+    response = sns_extended_client.publish(**publish_message_kwargs)
 
     assert response['ResponseMetadata']['HTTPStatusCode'] == 200
 
@@ -173,9 +171,6 @@ def extract_message_body_from_response(sns_extended_client,receive_message_respo
 
     return target_s3_msg_obj['Body'].read().decode()
 
-
-    
-
 def check_receive_message_response(sns_extended_client,receive_message_response, message_body, message_attributes):
     """
 
@@ -188,9 +183,6 @@ def check_receive_message_response(sns_extended_client,receive_message_response,
     """
     response_msg_body = extract_message_body_from_response(sns_extended_client,receive_message_response['Messages'][0]['Body'])
     assert response_msg_body == message_body
-
-    # if message_attributes:
-    #     assert receive_message_response['Messages'][0]['MessageAttributes'] == message_attributes
 
 def delete_message_helper(sqs_client,queue_url, receipet_handle):
     """
@@ -211,7 +203,6 @@ def delete_message_helper(sqs_client,queue_url, receipet_handle):
     )
 
     print("Response of delete msg : ")
-    print(response)
 
     assert response['ResponseMetadata']['HTTPStatusCode'] == 200
 
@@ -227,8 +218,6 @@ def delete_object_from_s3_helper(sns_extended_client, s3Key):
 
     logger.info("Deleting the object from the S3 bucket")
 
-    
-
     response = sns_extended_client.s3_client.delete_object(
         Bucket=sns_extended_client.large_payload_support,
         Key=s3Key
@@ -236,95 +225,10 @@ def delete_object_from_s3_helper(sns_extended_client, s3Key):
 
     assert response['ResponseMetadata']['HTTPStatusCode'] == 204
 
-# def test_send_receive_delete_workflow(sns_extended_client,sqs_client, queue,topic, message_body,
-#                                          message_attributes = None):
-#     """
-
-#     """
-
-
-def perform_send_receive_delete_workflow(sns_extended_client,sqs_client, queue,topic, message_body, 
-                                         message_attributes = None):
-    """
-    Responsible for replicating a workflow of sending, receiving and deleting a message
-    by calling the helper functions as and when necessary.
-
-    sqs_extended_client: The SQS Extended Client
-    queue: The SQS Queue
-    message_body: The message body
-    message_attributes: The message attributes
-    message_group_id: Tag specifying a message belongs to a message group (Required for FIFO Queues)
-    message_deduplication_id: Token used for deduplication of sent message (Required for FIFO Queues)
-
-    """
-    
-    queue_url = queue["QueueUrl"]
-    sqs_queue_arn = sqs_client.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["QueueArn"])["Attributes"].get("QueueArn")
-
-    kwargs = {
-        'sns_extended_client': sns_extended_client,
-        'topic_arn': topic,
-        'queue_url': queue_url,
-        'message_body': message_body,
-    }
-
-    if message_attributes:
-        kwargs['message_attributes'] = message_attributes
-
-    # Adding policy to SQS queue such that SNS topic can send msg to SQS queue
-    policy_json = create_allow_sns_to_write_to_sqs_policy_json(topic, sqs_queue_arn)
-    response = sqs_client.set_queue_attributes(
-        QueueUrl = queue_url,
-        Attributes = {
-            'Policy' : policy_json
-        }
-    )
-
-    # Subscribe SQS queue to SNS topic
-    sns_extended_client.subscribe(TopicArn=topic,Protocol="sqs",Endpoint=sqs_queue_arn,Attributes={"RawMessageDelivery":"true"})
-
-    publish_message_helper(**kwargs)
-
-    # Verifying that the S3 object was added
-    if sns_extended_client.large_payload_support:
-        assert not is_s3_bucket_empty(sns_extended_client)
-    
-    # Verifying whether specific S3 object with key is created while passing in message_attributes
-    if message_attributes and sns_extended_client.always_through_s3:
-        assert sns_extended_client.s3_client.get_object(
-            Bucket=sns_extended_client.large_payload_support,
-            Key=message_attributes['S3Key']['StringValue']
-        )
-
-    receive_message_response = receive_message_helper(sqs_client,queue_url)
-
-    receipet_handle = receive_message_response['Messages'][0]['ReceiptHandle']
-    # new_receipt_handle = old_receipt_handle
-
-    check_receive_message_response(sns_extended_client,receive_message_response, message_body, message_attributes)
-
-    # Change the message visibility here when the parameter (change_message_visibility) is true
-    # if change_message_visibility:
-    #     new_receipt_handle = change_message_visibility_helper(receive_message_response=receive_message_response, 
-    #                                      visibility_timeout=new_message_visibility, **kwargs)    
-
-
-    delete_message_helper(sqs_client, queue_url, receipet_handle)
-
-    # Deleting object from s3 bucket
-    if sns_extended_client.large_payload_support:
-        for receive_message in receive_message_response['Messages']:
-            delete_object_from_s3_helper(sns_extended_client, receive_message)
-      
-
-
-    return
-
-
-def test_send_receive_small_msg_through_s3(sns_extended_client_with_s3,sqs_client,queue,topic,small_message_body):
+def test_publish_receive_small_msg_through_s3(sns_extended_client_with_s3,sqs_client,queue,topic,small_message_body):
     """
     Responsible for replicating a workflow where SQS queue subscribe to sns_extended_client's topic. 
-    sns_extended_client send a message to that topic with the attribute 'always_through_s3' set to true
+    sns_extended_client publish a message to that topic with the attribute 'always_through_s3' set to true
     which will store in S3 and reference of that object is received by SQS queue by calling the helper functions.
 
     sns_extedned_client_with_s3 : The SNS Extended Client with S3 Bucket
@@ -334,11 +238,9 @@ def test_send_receive_small_msg_through_s3(sns_extended_client_with_s3,sqs_clien
     small_message_body: The Message 
     """ 
 
-    logger.info("Initializing execution of test_send_receive_small_msg_through_s3")
+    logger.info("Initializing execution of test_publish_receive_small_msg_through_s3")
 
     initialize_extended_client_attributes_through_s3(sns_extended_client_with_s3)
-
-    # perform_send_receive_delete_workflow(sns_extended_client_with_s3,sqs_client, queue,topic, small_message_body)
 
     queue_url = queue["QueueUrl"]
     sqs_queue_arn = sqs_client.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["QueueArn"])["Attributes"].get("QueueArn")
@@ -350,7 +252,7 @@ def test_send_receive_small_msg_through_s3(sns_extended_client_with_s3,sqs_clien
         'message_body': small_message_body,
     }
 
-    # Adding policy to SQS queue such that SNS topic can send msg to SQS queue
+    # Adding policy to SQS queue such that SNS topic can publish msg to SQS queue
     policy_json = create_allow_sns_to_write_to_sqs_policy_json(topic, sqs_queue_arn)
     response = sqs_client.set_queue_attributes(
         QueueUrl = queue_url,
@@ -378,7 +280,6 @@ def test_send_receive_small_msg_through_s3(sns_extended_client_with_s3,sqs_clien
     # Retrieve the message from s3 Bucket and check value 
     assert retrive_message_from_s3(sns_extended_client_with_s3,json_receive_message_body['s3Key']) == small_message_body
     
-
     # Delete message from SQS queue
     receipet_handle = receive_message_response['Messages'][0]['ReceiptHandle']
     delete_message_helper(sqs_client, queue_url, receipet_handle)
@@ -388,16 +289,14 @@ def test_send_receive_small_msg_through_s3(sns_extended_client_with_s3,sqs_clien
 
     # The S3 bucket should be empty
     assert is_s3_bucket_empty(sns_extended_client_with_s3)
-    logger.info("Completed execution of test_send_receive_small_msg_through_s3")
+    logger.info("Completed execution of test_publish_receive_small_msg_through_s3")
 
     return
 
-    
-
-def test_send_receive_small_msg_not_through_s3(sns_extended_client, sqs_client, queue, topic, small_message_body):
+def test_publish_receive_small_msg_not_through_s3(sns_extended_client, sqs_client, queue, topic, small_message_body):
     """
     Responsible for replicating a workflow where SQS queue subscribe to sns_extended_client's topic.
-    sns_extended_client send a message to that topic with the attribute 'always_through_s3' set to false
+    sns_extended_client publish a message to that topic with the attribute 'always_through_s3' set to false
     which will store in S3 and reference of that object is received by SQS queue by calling the helper functions.
 
     sns_extended_client: The SNS Extended Client
@@ -407,7 +306,7 @@ def test_send_receive_small_msg_not_through_s3(sns_extended_client, sqs_client, 
     small_message_body: The Message
     """
 
-    logger.info("Initializing execution of test_send_receive_small_msg_not_through_s3")
+    logger.info("Initializing execution of test_publish_receive_small_msg_not_through_s3")
 
     queue_url = queue["QueueUrl"]
     sqs_queue_arn = sqs_client.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["QueueArn"])["Attributes"].get("QueueArn")
@@ -419,7 +318,7 @@ def test_send_receive_small_msg_not_through_s3(sns_extended_client, sqs_client, 
         'message_body': small_message_body,
     }
 
-    # Adding policy to SQS queue such that SNS topic can send msg to SQS queue
+    # Adding policy to SQS queue such that SNS topic can publish msg to SQS queue
     policy_json = create_allow_sns_to_write_to_sqs_policy_json(topic, sqs_queue_arn)
     response = sqs_client.set_queue_attributes(
         QueueUrl = queue_url,
@@ -438,20 +337,18 @@ def test_send_receive_small_msg_not_through_s3(sns_extended_client, sqs_client, 
     # The body of response should have same message body that was being sent to topic by SNS
     assert receive_message_response['Messages'][0]['Body'] == small_message_body
 
-    # print(receive_message_response)
-
     # Delete message from SQS queue
     receipet_handle = receive_message_response['Messages'][0]['ReceiptHandle']
     delete_message_helper(sqs_client, queue_url, receipet_handle)
 
-    logger.info("Completed execution of test_send_receive_small_msg_not_through_s3")
+    logger.info("Completed execution of test_publish_receive_small_msg_not_through_s3")
 
     return
     
-def test_send_receive_large_msg_which_passes_threshold_through_s3(sns_extended_client_with_s3,sqs_client,queue,topic,large_message_body):
+def test_publish_receive_large_msg_which_passes_threshold_through_s3(sns_extended_client_with_s3,sqs_client,queue,topic,large_message_body):
     """
     Responsible for replicating a workflow where SQS queue subscribe to sns_extended_client's topic. 
-    sns_extended_client send a message to that topic which exceeds the default threshold
+    sns_extended_client publish a message to that topic which exceeds the default threshold
     which will store in S3 and reference of that object is received by SQS queue by calling the helper functions.
 
     sns_extedned_client_with_s3 : The SNS Extended Client with S3 Bucket
@@ -461,7 +358,7 @@ def test_send_receive_large_msg_which_passes_threshold_through_s3(sns_extended_c
     large_message_body: The Message 
     """ 
 
-    logger.info("Initializing execution of test_send_receive_large_msg_which_passes_threshold_through_s3")
+    logger.info("Initializing execution of test_publish_receive_large_msg_which_passes_threshold_through_s3")
 
     queue_url = queue["QueueUrl"]
     sqs_queue_arn = sqs_client.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["QueueArn"])["Attributes"].get("QueueArn")
@@ -473,7 +370,7 @@ def test_send_receive_large_msg_which_passes_threshold_through_s3(sns_extended_c
         'message_body': large_message_body,
     }
 
-    # Adding policy to SQS queue such that SNS topic can send msg to SQS queue
+    # Adding policy to SQS queue such that SNS topic can publish msg to SQS queue
     policy_json = create_allow_sns_to_write_to_sqs_policy_json(topic, sqs_queue_arn)
     response = sqs_client.set_queue_attributes(
         QueueUrl = queue_url,
@@ -500,7 +397,6 @@ def test_send_receive_large_msg_which_passes_threshold_through_s3(sns_extended_c
 
     # Retrieve the message from s3 Bucket and check value 
     assert retrive_message_from_s3(sns_extended_client_with_s3,json_receive_message_body['s3Key']) == large_message_body
-    
 
     # Delete message from SQS queue
     receipet_handle = receive_message_response['Messages'][0]['ReceiptHandle']
@@ -511,14 +407,14 @@ def test_send_receive_large_msg_which_passes_threshold_through_s3(sns_extended_c
 
     # The S3 bucket should be empty
     assert is_s3_bucket_empty(sns_extended_client_with_s3)
-    logger.info("Completed execution of test_send_receive_large_msg_which_passes_threshold_through_s3")
+    logger.info("Completed execution of test_publish_receive_large_msg_which_passes_threshold_through_s3")
 
     return
 
-def test_send_receive_msg_with_custom_s3_key(sns_extended_client_with_s3, sqs_client, queue, topic, small_message_body,custom_s3_key_attribute):
+def test_publish_receive_msg_with_custom_s3_key(sns_extended_client_with_s3, sqs_client, queue, topic, small_message_body,custom_s3_key_attribute):
     """
     Responsible for replicating a workflow where SQS queue subscribe to sns_extended_client's topic.
-    sns_extended_client send a message to that topic with the custom attribute to store message in s3
+    sns_extended_client publish a message to that topic with the custom attribute to store message in s3
     and reference of that object is received by SQS queue by calling the helper functions.
 
     sns_extended_client_with_s3: The SNS Extended Client with Existed S3 bucket
@@ -529,11 +425,9 @@ def test_send_receive_msg_with_custom_s3_key(sns_extended_client_with_s3, sqs_cl
     custom_s3_key_attribute: Attribute to set custom Key of message
     """    
 
-    logger.info("Initializing execution of test_send_receive_small_msg_through_s3")
+    logger.info("Initializing execution of test_publish_receive_small_msg_through_s3")
 
     initialize_extended_client_attributes_through_s3(sns_extended_client_with_s3)
-
-    # perform_send_receive_delete_workflow(sns_extended_client_with_s3,sqs_client, queue,topic, small_message_body)
 
     queue_url = queue["QueueUrl"]
     sqs_queue_arn = sqs_client.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["QueueArn"])["Attributes"].get("QueueArn")
@@ -546,7 +440,7 @@ def test_send_receive_msg_with_custom_s3_key(sns_extended_client_with_s3, sqs_cl
         'message_attributes': custom_s3_key_attribute
     }
 
-    # Adding policy to SQS queue such that SNS topic can send msg to SQS queue
+    # Adding policy to SQS queue such that SNS topic can publish msg to SQS queue
     policy_json = create_allow_sns_to_write_to_sqs_policy_json(topic, sqs_queue_arn)
     response = sqs_client.set_queue_attributes(
         QueueUrl = queue_url,
@@ -570,14 +464,12 @@ def test_send_receive_msg_with_custom_s3_key(sns_extended_client_with_s3, sqs_cl
     message_stored_in_s3_attributes = ['s3BucketName','s3Key']
     for key in json_receive_message_body.keys():
         assert key in message_stored_in_s3_attributes
-
     
     # Stored message key should be same as custom_s3_key_attribute datavalue
     assert custom_s3_key_attribute['S3Key']['StringValue'] == json_receive_message_body['s3Key']
 
     # Retrieve the message from s3 Bucket and check value 
     assert retrive_message_from_s3(sns_extended_client_with_s3,json_receive_message_body['s3Key']) == small_message_body
-    
 
     # Delete message from SQS queue
     receipet_handle = receive_message_response['Messages'][0]['ReceiptHandle']
@@ -588,15 +480,9 @@ def test_send_receive_msg_with_custom_s3_key(sns_extended_client_with_s3, sqs_cl
 
     # The S3 bucket should be empty
     assert is_s3_bucket_empty(sns_extended_client_with_s3)
-    logger.info("Completed execution of test_send_receive_small_msg_through_s3")
+    logger.info("Completed execution of test_publish_receive_small_msg_through_s3")
 
     return
-
-
-
-
-
-
 
 def test_session(session):
     assert boto3.session.Session == SNSExtendedClientSession
