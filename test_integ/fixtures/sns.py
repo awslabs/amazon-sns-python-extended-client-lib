@@ -6,7 +6,7 @@ import random
 @pytest.fixture()
 def sns_extended_client(session):
     sns_client = session.client("sns",region_name='us-east-1')
-    sns_client.large_payload_support = f'integration-test-bucket-{random.randint(0, 10000)}'
+    sns_client.large_payload_support = f'integration-sns-extended-lib-test-bucket-{random.randint(0, 10000)}'
     return sns_client
 
 @pytest.fixture()

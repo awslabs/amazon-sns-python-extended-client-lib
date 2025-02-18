@@ -25,7 +25,7 @@ jobs:
           python-version: "3.9"
       - name: Install Poetry
         run: |
-          pip install poetry==1.4.0
+          pip install poetry
           poetry --version
       - name: Check if there is a parent commit
         id: check-parent-commit
